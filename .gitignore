@@ -1,0 +1,30 @@
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Auth sessions
+auth_info/
+auth_info_baileys/
+*.session
+
+# Donate image (user-specific, shouldn't be in lib repo by default)
+# donasi.png
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+*.tgz
