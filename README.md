@@ -153,7 +153,7 @@ await sock.productCreate({ name: 'Produk A', price: 50000, currency: 'IDR' })
 
 Built on [WhiskeySockets/Baileys](https://github.com/WhiskeySockets/Baileys) — full credit to the original maintainers and contributors for the underlying protocol implementation. seraphbail's contribution is the CommonJS conversion and the anti-ban toolkit layered on top.
 
-Join [Telegram] (https://t.me/flathK) for further information 
+ Join [Telegram!](https://t.me/flathK) for more information!
 
 ---
 
