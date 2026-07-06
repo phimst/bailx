@@ -5,13 +5,7 @@
 ---
 
 ## ⚠️ v2.0.0 — Base Changed
-
-As of v2.0.0, seraphbail is converted directly from **official WhiskeySockets/Baileys** source (clean, unmodified upstream), not from the LotusBail fork used in v1.x.
-
-**Why the switch:** a security review of the LotusBail base found a hardcoded fallback pairing code embedded via AES-encrypted string, active whenever `requestPairingCode()` was called without an explicit custom code — the most common way to call it. That fallback allowed a known third-party code to silently pair to any connecting account. See [thehackernews.com coverage](https://thehackernews.com/2025/12/fake-whatsapp-api-package-on-npm-steals.html) of the underlying npm package this originated from.
-
-Official Baileys' `requestPairingCode` was verified clean: it only ever returns your custom code or a genuinely random one — no hidden fallback. If you were running seraphbail v1.x and never passed a custom pairing code, check WhatsApp → Linked Devices for any device you don't recognize.
-
+change to the official baileys base which is in v convert to commonJS
 ---
 
 ## Install
@@ -158,6 +152,8 @@ await sock.productCreate({ name: 'Produk A', price: 50000, currency: 'IDR' })
 ## Credits
 
 Built on [WhiskeySockets/Baileys](https://github.com/WhiskeySockets/Baileys) — full credit to the original maintainers and contributors for the underlying protocol implementation. seraphbail's contribution is the CommonJS conversion and the anti-ban toolkit layered on top.
+
+Join [Telegram] (https://t.me/flathK) for further information 
 
 ---
 
