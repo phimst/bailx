@@ -1,6 +1,6 @@
 {
-  "name": "seraphbail",
-  "version": "2.0.0",
+  "name": "bailx",
+  "version": "1.0.0",
   "description": "A CommonJS WhatsApp Web API library — CJS conversion of official @whiskeysockets/baileys v7 with an added anti-ban toolkit",
   "keywords": [
     "whatsapp",
@@ -46,10 +46,18 @@
     "sharp": "*"
   },
   "peerDependenciesMeta": {
-    "audio-decode": { "optional": true },
-    "jimp": { "optional": true },
-    "link-preview-js": { "optional": true },
-    "sharp": { "optional": true }
+    "audio-decode": {
+      "optional": true
+    },
+    "jimp": {
+      "optional": true
+    },
+    "link-preview-js": {
+      "optional": true
+    },
+    "sharp": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=20.0.0"

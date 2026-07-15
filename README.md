@@ -1,80 +1,117 @@
 # seraphbail
 
-> CommonJS WhatsApp Web API library — CJS conversion of official [@whiskeysockets/baileys](https://github.com/WhiskeySockets/Baileys) v7.0.0-rc13, with an added anti-ban toolkit.
+CommonJS WhatsApp library, base-nya langsung dari [official Baileys](https://github.com/WhiskeySockets/Baileys) v7 (bukan fork abal-abal), plus toolkit anti-banned yang lumayan niat digarapnya. Buat lo yang komunitasnya masih setia sama `require()` dan males migrasi ke ESM, ini rumah lo.
 
 ---
 
-## ⚠️ v2.0.0 — Base Changed
-change to the official baileys base which is in v convert to commonJS
----
-
-## Install
+## 📦 Install
 
 ```bash
 npm i seraphbail
 ```
 
-A postinstall script automatically patches a known `whatsapp-rust-bridge` CJS export issue — no manual steps needed.
+Udah termasuk postinstall script yang otomatis benerin bug CJS export di `whatsapp-rust-bridge`. Gak perlu ngoprek manual, tinggal install aja beres.
 
 ---
 
-## What's Included
-
-| Feature | Status |
-|---|---|
-| Full CommonJS (official Baileys is ESM-only) | ✅ |
-| WhatsApp Business support (catalog, profile, orders) | ✅ (inherited from upstream) |
-| Custom pairing code support | ✅ (inherited, 8-char, verified clean) |
-| Smart Presence Manager | ✅ |
-| Auto-retry on failed send | ✅ |
-| Better WA disconnect error messages | ✅ |
-| `suggestedReconnectMs` on connection close | ✅ |
-| Memory leak fix on device cache | ✅ |
-| Album message helper | ✅ |
-| Reachout Risk Score | ✅ |
-| Adaptive Send Throttle | ✅ |
-| Session Health Monitor | ✅ |
-| `.seraphdonate` easter egg command | ✅ (opt-in) |
-| Auto-patched `whatsapp-rust-bridge` install | ✅ |
+## 🆕 Apa yang baru di v2.1.0
+- **Reactive Presence Manager** — akun sekarang idle secara default, baru "online" pas ada yang chat beneran, terus balik idle abis 5 menit sepi. Gak online 24 jam nonstop kayak robot, tapi juga gak ngaruh ke kecepatan bales chat
+- **`makeInMemoryStore` balik lagi** — yang lama sering nyari-nyari fitur ini abis Baileys resmi buang dia dari core, sekarang kita bikinin shim-nya biar script lama lo tetep jalan tanpa refactor
+- **Anti-ban toolkit** (Risk Score, Adaptive Throttle, Session Health) — auto nempel begitu lo connect, gak perlu setup apa-apa
+- **Album message helper** — kirim beberapa foto/video sekaligus dalam satu bundel
+- **`.seraphdonate`** — easter egg command opsional buat nerima donasi lewat QR
 
 ---
 
-## A note on account bans
+## 🎯 Fitur-fitur
 
-The features below are designed to reduce the *risk* of WhatsApp's automated behavioral detection flagging your account — they cannot make an account immune to it. Restrictions (soft bans) are enforced server-side based on send patterns, volume, and account trust signals; no client library can guarantee avoidance if usage is aggressive. Use the risk score and throttle as guardrails, not guarantees.
+### Reactive Presence Manager (otomatis, gak perlu setup)
+
+Defaultnya nyala otomatis. Behaviornya:
+
+```
+Idle (default)
+  → ada chat masuk beneran → langsung "online"
+  → sepi 5 menit → balik idle lagi
+```
+
+Kalo idle-nya kelamaan (30 menit+), ada fallback cycling pelan di background biar akun gak keliatan "mati" berhari-hari. Mau matiin atau custom durasinya?
+
+```js
+const sock = makeWASocket({
+  enablePresenceManager: true, // default udah true, bisa di-false-in
+  presenceManagerOptions: {
+    reactiveWindowMs: 5 * 60 * 1000, // berapa lama online setelah chat terakhir
+    idleFallback: true,
+    idleFallbackAfterMs: 30 * 60 * 1000
+  }
+})
+
+// Mau akses manual juga bisa
+sock.presenceManager.currentState  // 'available' | 'unavailable'
+sock.presenceManager.idleForMs     // udah berapa lama sepi
+```
 
 ---
 
-## Anti-Ban Toolkit
+### `makeInMemoryStore` — buat yang script-nya masih lama
 
-These three modules work together automatically once you connect — no setup required, though each is also exported standalone if you want to build your own logic on top.
+Baileys resmi udah buang fitur ini dari core sejak v6.6+, tapi kalo komunitas lo masih pake pattern lama, tenang aja, kita bikinin lagi:
 
-### Reachout Risk Score
-Tracks your account's own send pattern in a rolling window (frequency, group vs personal ratio, burst gaps) and produces a `low` / `medium` / `high` risk level — proactively, before WhatsApp issues a 463 restriction.
+```js
+const { makeInMemoryStore } = require('seraphbail')
+
+const store = makeInMemoryStore({ logger: pino({ level: 'silent' }) })
+store.bind(sock.ev)
+
+const sock = makeWASocket({
+  auth: state,
+  getMessage: async (key) => {
+    return store.loadMessage(key.remoteJid, key.id)?.message
+  }
+})
+```
+
+Bisa juga persist ke file kalo mau data-nya nyangkut abis restart:
+
+```js
+store.writeToFile('./store.json')       // save
+store.readFromFile('./store.json')      // restore
+```
+
+**Gak mau pake ini?** Santai, ini full opsional. Bikin store custom sendiri (Redis, SQLite, whatever) juga bisa, tinggal kasih fungsi `getMessage` sendiri ke `makeWASocket()`, gak ada dependency wajib ke shim ini.
+
+---
+
+### Anti-Ban Toolkit (otomatis nempel)
+
+Tiga modul ini jalan sendiri begitu lo connect, gak perlu config apapun. Tapi kalo mau bikin logic sendiri di atasnya, semua bisa diakses manual juga.
+
+**Reachout Risk Score** — ngitung pola kirim pesan lo (frekuensi, rasio grup vs personal, jarak antar pesan) dan kasih level `low` / `medium` / `high` SEBELUM WA nge-flag akun lo, bukan pas udah kena.
 
 ```js
 sock.getRiskScore()
 // { level: 'medium', score: 42, metrics: { messagesInWindow: 18, perMinute: 3.2, groupRatio: 0.6, avgGapMs: 4200, failureRate: 0 } }
 ```
 
-### Adaptive Send Throttle
-Automatically applied inside `sock.sendMessage()`. Slows down based on your account's own recent error history — not a hardcoded delay. A clean history eases back toward a fast base delay; recent failures or a 429 push it up (429 enforces a hard 60s+ cooldown).
+**Adaptive Send Throttle** — otomatis nge-slow down kirim pesan berdasarkan history error akun lo sendiri, bukan delay hardcode. Kalo baru-baru ini banyak gagal atau kena 429, otomatis lebih santai ngirimnya.
 
 ```js
-sock.getAdaptiveDelay() // current recommended delay in ms
-// disable auto-throttling if you want to manage pacing yourself:
-makeWASocket({ enableAdaptiveThrottle: false })
+sock.getAdaptiveDelay() // delay yang lagi direkomendasiin, dalam ms
+makeWASocket({ enableAdaptiveThrottle: false }) // matiin kalo mau atur sendiri
 ```
 
-### Session Health Monitor
+**Session Health Monitor**
 ```js
 sock.getSessionHealth()
 // { uptimeMs: 1823000, reconnects: 1, sent: 140, failed: 2, successRate: 0.986, status: 'healthy', lastError: 405 }
 ```
 
+> Jujur nih bro: fitur-fitur ini ngurangin RESIKO kena banned, bukan bikin akun kebal. WA nge-ban berdasarkan pola perilaku dari server side, gak ada library yang bisa jamin 100% aman kalo lo emang spam berlebihan. Anggep ini pagar pengaman, bukan jaminan.
+
 ---
 
-## Album Message
+### Kirim Album (banyak foto/video sekaligus)
 
 ```js
 await sock.sendAlbumMessage(jid, [
@@ -83,43 +120,26 @@ await sock.sendAlbumMessage(jid, [
   { video: { url: './video1.mp4' } }
 ])
 ```
-Sends a linked album (min. 2 items) with a small natural delay between items to avoid a burst-send pattern.
+
+Minimal 2 item, otomatis ada jeda natural antar kiriman biar gak keliatan burst-send.
 
 ---
 
-## `.seraphdonate` (opt-in)
+### `.seraphdonate` (opsional)
 
-Disabled by default. When enabled, replying with the trigger command sends back a QR/image found at `donasi.<png|jpg|jpeg|webp>` in your project root.
+Default mati. Kalo diaktifin, orang yang ngetik command ini bakal dikirimin gambar QR/donasi yang lo taro di root project (`donasi.png` / `.jpg` / `.jpeg` / `.webp`).
 
 ```js
 makeWASocket({
   enableDonateCommand: true,
-  donateCommand: '.seraphdonate',   // optional, this is the default
-  donateCaption: 'Support seraphbail! ☕'
+  donateCommand: '.seraphdonate', // opsional, ini default-nya
+  donateCaption: 'Mampir sini kalo mau traktir kopi ☕'
 })
 ```
 
 ---
 
-## Smart Presence Manager
-
-```js
-const { createPresenceManager } = require('seraphbail')
-
-sock.ev.on('connection.update', async ({ connection }) => {
-  if (connection === 'open') {
-    const pm = createPresenceManager(sock)
-    await pm.start()   // cycles available ↔ unavailable naturally
-    sock.ev.once('connection.update', ({ connection }) => {
-      if (connection === 'close') pm.stop()
-    })
-  }
-})
-```
-
----
-
-## Smarter Reconnect & Errors
+### Reconnect & Error yang Lebih Manusiawi
 
 ```js
 const { isSafeToReconnect, getDisconnectDescription } = require('seraphbail')
@@ -127,7 +147,7 @@ const { isSafeToReconnect, getDisconnectDescription } = require('seraphbail')
 sock.ev.on('connection.update', ({ connection, lastDisconnect, suggestedReconnectMs }) => {
   if (connection === 'close') {
     const code = lastDisconnect?.error?.output?.statusCode
-    console.log(getDisconnectDescription(code))
+    console.log(getDisconnectDescription(code)) // deskripsi human-readable, bukan cuma angka
     if (isSafeToReconnect(code)) {
       setTimeout(() => startSock(), suggestedReconnectMs ?? 3000)
     }
@@ -137,9 +157,9 @@ sock.ev.on('connection.update', ({ connection, lastDisconnect, suggestedReconnec
 
 ---
 
-## WhatsApp Business
+### WhatsApp Business
 
-Inherited from official Baileys — connect a Business account the same way as a regular one via `makeWASocket`. Catalog/profile features only work if the connected number is genuinely a WhatsApp Business account.
+Ikutan dari base official, connect-nya sama kayak akun biasa. Fitur catalog/profile cuma jalan kalo nomornya beneran akun WA Business.
 
 ```js
 const profile = await sock.getBusinessProfile(jid)
@@ -149,11 +169,58 @@ await sock.productCreate({ name: 'Produk A', price: 50000, currency: 'IDR' })
 
 ---
 
+## 🚀 Quick Start (Pairing Code)
+
+```js
+const { makeWASocket, useMultiFileAuthState, DisconnectReason,
+        fetchLatestBaileysVersion, getDisconnectDescription, Browsers } = require('seraphbail')
+const readline = require('readline')
+
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+const question = (text) => new Promise(res => rl.question(text, res))
+
+async function startSock() {
+  const { state, saveCreds } = await useMultiFileAuthState('./auth_info')
+  const { version } = await fetchLatestBaileysVersion()
+
+  const sock = makeWASocket({
+    version,
+    auth: state,
+    browser: Browsers.ubuntu('Chrome'),
+    markOnlineOnConnect: false
+  })
+
+  if (!state.creds.registered) {
+    const number = await question('Nomor WA (628xxx): ')
+    rl.close()
+    const code = await sock.requestPairingCode(number.trim())
+    console.log(`Pairing code: ${code}`)
+  }
+
+  sock.ev.on('creds.update', saveCreds)
+
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, suggestedReconnectMs }) => {
+    if (connection === 'open') console.log('Connected!')
+    if (connection === 'close') {
+      const code = lastDisconnect?.error?.output?.statusCode
+      console.log(getDisconnectDescription(code))
+      if (code !== DisconnectReason.loggedOut) {
+        setTimeout(startSock, suggestedReconnectMs ?? 3000)
+      }
+    }
+  })
+
+  return sock
+}
+
+startSock()
+```
+
+---
+
 ## Credits
 
-Built on [WhiskeySockets/Baileys](https://github.com/WhiskeySockets/Baileys) — full credit to the original maintainers and contributors for the underlying protocol implementation. seraphbail's contribution is the CommonJS conversion and the anti-ban toolkit layered on top.
-
- Join [Telegram!](https://t.me/flathK) for more information!
+Dibangun di atas [WhiskeySockets/Baileys](https://github.com/WhiskeySockets/Baileys) — full credit ke maintainer dan kontributor asli buat implementasi protokolnya. Kontribusi seraphbail cuma di konversi CommonJS-nya dan toolkit anti-ban di atasnya.
 
 ---
 
